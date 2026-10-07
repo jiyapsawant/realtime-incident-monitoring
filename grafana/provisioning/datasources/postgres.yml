@@ -1,0 +1,11 @@
+apiVersion: 1
+datasources:
+  - name: Incidents DB
+    uid: pg
+    type: postgres
+    url: postgres:5432
+    user: ${PG_USER}
+    database: ${PG_DB}
+    isDefault: true
+    jsonData: {database: "${PG_DB}", sslmode: disable, postgresVersion: 1600}
+    secureJsonData: {password: "${PG_PASSWORD}"}

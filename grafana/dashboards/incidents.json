@@ -1,0 +1,153 @@
+{
+ "title": "Log Pipeline - Incident Overview",
+ "uid": "log-pipeline",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "10s",
+ "time": {
+  "from": "now-1h",
+  "to": "now"
+ },
+ "panels": [
+  {
+   "id": 1,
+   "title": "Open incidents",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT count(*) AS open FROM incidents WHERE status='open'"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "title": "Error events (last hour)",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 6,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT COALESCE(sum(event_count),0) AS errors FROM error_clusters WHERE window_start > now() - interval '1 hour'"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "title": "Incidents by severity",
+   "type": "barchart",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 12,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT severity, count(*) AS incidents FROM incidents GROUP BY 1 ORDER BY 1"
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "title": "Errors per minute by service",
+   "type": "timeseries",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 24,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT window_start AS time, service AS metric, SUM(event_count) AS errors FROM error_clusters WHERE $__timeFilter(window_start) GROUP BY 1,2 ORDER BY 1"
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "title": "Recent incidents (AI summaries)",
+   "type": "table",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 13,
+    "w": 24,
+    "h": 11
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT created_at, severity, service, title, summary, root_cause, suggested_actions, event_count, status FROM incidents ORDER BY created_at DESC LIMIT 50"
+    }
+   ]
+  }
+ ]
+}

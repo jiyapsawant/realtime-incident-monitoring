@@ -1,0 +1,13 @@
+# secrets and local config
+.env
+
+# runtime data (Delta Lake files, Spark checkpoints)
+data/*
+
+# Maven / IDE
+target/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+!data/.gitkeep

@@ -1,0 +1,937 @@
+{
+ "title": "Incident Analytics (KPIs, Trends, RCA)",
+ "uid": "incident-analytics",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "30s",
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "timezone": "browser",
+ "tags": [
+  "analytics"
+ ],
+ "templating": {
+  "list": [
+   {
+    "name": "service",
+    "label": "Service",
+    "multi": true,
+    "includeAll": true,
+    "current": {
+     "selected": true,
+     "text": [
+      "All"
+     ],
+     "value": [
+      "$__all"
+     ]
+    },
+    "sort": 1,
+    "type": "query",
+    "datasource": {
+     "type": "postgres",
+     "uid": "pg"
+    },
+    "query": "SELECT DISTINCT service FROM error_clusters ORDER BY 1",
+    "definition": "SELECT DISTINCT service FROM error_clusters ORDER BY 1",
+    "refresh": 2
+   },
+   {
+    "name": "severity",
+    "label": "Severity",
+    "multi": true,
+    "includeAll": true,
+    "current": {
+     "selected": true,
+     "text": [
+      "All"
+     ],
+     "value": [
+      "$__all"
+     ]
+    },
+    "sort": 1,
+    "type": "custom",
+    "query": "P1,P2,P3,P4,Unclassified",
+    "options": []
+   },
+   {
+    "name": "error_type",
+    "label": "Error type",
+    "multi": true,
+    "includeAll": true,
+    "current": {
+     "selected": true,
+     "text": [
+      "All"
+     ],
+     "value": [
+      "$__all"
+     ]
+    },
+    "sort": 1,
+    "type": "custom",
+    "query": "Timeout,Connection,Memory,Disk,Parsing,Other",
+    "options": []
+   }
+  ]
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "row",
+   "title": "Headline KPIs",
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   },
+   "collapsed": false
+  },
+  {
+   "id": 2,
+   "title": "Total incidents",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT COUNT(*) AS \"Total incidents\" FROM v_incidents WHERE $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type)"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "blue"
+     }
+    }
+   },
+   "description": "Incidents created by the LLM layer in the selected range"
+  },
+  {
+   "id": 3,
+   "title": "Total error events",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 3,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT COALESCE(SUM(event_count),0) AS \"Error events\" FROM v_error_events WHERE $__timeFilter(window_start) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type)"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "blue"
+     }
+    }
+   },
+   "description": "Sum of clustered error log lines"
+  },
+  {
+   "id": 4,
+   "title": "Error rate",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 6,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT ROUND(100.0*SUM(log_count) FILTER (WHERE level IN ('ERROR','FATAL','CRITICAL'))/NULLIF(SUM(log_count),0),2) AS \"Error rate\" FROM log_stats_hourly WHERE $__timeFilter(hour) AND service IN ($service)"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "orange"
+     }
+    }
+   },
+   "description": "Error logs / all logs (from Delta Lake gold table; hourly buckets)"
+  },
+  {
+   "id": 5,
+   "title": "Critical (P1/P2)",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 9,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT COUNT(*) AS \"Critical\" FROM v_incidents WHERE criticality='Critical' AND $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type)"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "red"
+     }
+    }
+   }
+  },
+  {
+   "id": 6,
+   "title": "Non-critical",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT COUNT(*) AS \"Non-critical\" FROM v_incidents WHERE criticality='Non-critical' AND $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type)"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "green"
+     }
+    }
+   }
+  },
+  {
+   "id": 7,
+   "title": "Unresolved",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 15,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT COUNT(*) AS \"Unresolved\" FROM v_incidents WHERE resolution_state='Unresolved' AND $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type)"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "yellow"
+     }
+    }
+   }
+  },
+  {
+   "id": 8,
+   "title": "Resolved %",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 18,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT ROUND(100.0*COUNT(*) FILTER (WHERE resolution_state='Resolved')/NULLIF(COUNT(*),0),1) AS \"Resolved\" FROM v_incidents WHERE $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type)"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "green"
+     }
+    }
+   }
+  },
+  {
+   "id": 9,
+   "title": "MTTR (min)",
+   "type": "stat",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 21,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT ROUND(AVG(ttr_minutes)::numeric,1) AS \"MTTR\" FROM v_incidents WHERE resolution_state='Resolved' AND $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type)"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value_and_name"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "m",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "purple"
+     }
+    }
+   },
+   "description": "Mean time to resolve = resolved_at - first_seen, resolved incidents only"
+  },
+  {
+   "id": 10,
+   "type": "row",
+   "title": "Trends",
+   "gridPos": {
+    "x": 0,
+    "y": 5,
+    "w": 24,
+    "h": 1
+   },
+   "collapsed": false
+  },
+  {
+   "id": 11,
+   "title": "Incident trend by severity",
+   "type": "timeseries",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 6,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT $__timeGroupAlias(first_seen,'10m'), severity AS metric, COUNT(*) AS incidents FROM v_incidents WHERE $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) GROUP BY 1,2 ORDER BY 1"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "drawStyle": "bars",
+      "fillOpacity": 80,
+      "stacking": {
+       "mode": "normal",
+       "group": "A"
+      }
+     }
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 12,
+   "title": "Error events over time by service",
+   "type": "timeseries",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 6,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT $__timeGroupAlias(window_start,'5m'), service AS metric, SUM(event_count) AS errors FROM v_error_events WHERE $__timeFilter(window_start) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) GROUP BY 1,2 ORDER BY 1"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "drawStyle": "line",
+      "fillOpacity": 15,
+      "lineWidth": 2
+     }
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 13,
+   "type": "row",
+   "title": "Where are we failing?",
+   "gridPos": {
+    "x": 0,
+    "y": 14,
+    "w": 24,
+    "h": 1
+   },
+   "collapsed": false
+  },
+  {
+   "id": 14,
+   "title": "Errors by service and severity",
+   "type": "barchart",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 15,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT service, COALESCE(SUM(event_count) FILTER (WHERE severity='P1'),0) AS \"P1\", COALESCE(SUM(event_count) FILTER (WHERE severity='P2'),0) AS \"P2\", COALESCE(SUM(event_count) FILTER (WHERE severity='P3'),0) AS \"P3\", COALESCE(SUM(event_count) FILTER (WHERE severity='P4'),0) AS \"P4\", COALESCE(SUM(event_count) FILTER (WHERE severity='Unclassified'),0) AS \"Unclassified\" FROM v_error_events WHERE $__timeFilter(window_start) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) GROUP BY service ORDER BY SUM(event_count) DESC"
+    }
+   ],
+   "options": {
+    "xField": "service",
+    "stacking": "normal",
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "stacking": {
+       "mode": "normal",
+       "group": "A"
+      },
+      "fillOpacity": 80
+     }
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 15,
+   "title": "Most failing services",
+   "type": "barchart",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 15,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT service, SUM(event_count) AS errors FROM v_error_events WHERE $__timeFilter(window_start) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) GROUP BY service ORDER BY errors DESC LIMIT 10"
+    }
+   ],
+   "options": {
+    "xField": "service",
+    "orientation": "horizontal",
+    "legend": {
+     "displayMode": "hidden"
+    }
+   }
+  },
+  {
+   "id": 16,
+   "title": "Critical vs non-critical",
+   "type": "piechart",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 15,
+    "w": 4,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT criticality, COUNT(*) AS incidents FROM v_incidents WHERE $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) GROUP BY 1"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "values": true,
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": ""
+    },
+    "pieType": "donut",
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "values": [
+      "value",
+      "percent"
+     ]
+    }
+   }
+  },
+  {
+   "id": 17,
+   "title": "Resolved vs unresolved",
+   "type": "piechart",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 15,
+    "w": 4,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT resolution_state, COUNT(*) AS incidents FROM v_incidents WHERE $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) GROUP BY 1"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "values": true,
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": ""
+    },
+    "pieType": "donut",
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "values": [
+      "value",
+      "percent"
+     ]
+    }
+   }
+  },
+  {
+   "id": 18,
+   "type": "row",
+   "title": "Root cause analysis",
+   "gridPos": {
+    "x": 0,
+    "y": 23,
+    "w": 24,
+    "h": 1
+   },
+   "collapsed": false
+  },
+  {
+   "id": 19,
+   "title": "Root-cause distribution",
+   "type": "piechart",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 24,
+    "w": 6,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT root_cause_category, COUNT(*) AS incidents FROM v_incidents WHERE $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) GROUP BY 1 ORDER BY 2 DESC"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "values": true,
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": ""
+    },
+    "pieType": "donut",
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "values": [
+      "value",
+      "percent"
+     ]
+    }
+   }
+  },
+  {
+   "id": 20,
+   "title": "MTTR by service (min)",
+   "type": "barchart",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 6,
+    "y": 24,
+    "w": 6,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT service, ROUND(AVG(ttr_minutes)::numeric,1) AS mttr_min FROM v_incidents WHERE resolution_state='Resolved' AND $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) GROUP BY service ORDER BY 2 DESC"
+    }
+   ],
+   "options": {
+    "xField": "service",
+    "legend": {
+     "displayMode": "hidden"
+    }
+   }
+  },
+  {
+   "id": 21,
+   "title": "Top recurring errors",
+   "type": "table",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 24,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT template AS \"Error pattern\", error_type AS \"Type\", service AS \"Service\", SUM(event_count) AS \"Occurrences\", COUNT(*) AS \"Minutes affected\", MAX(window_start) AS \"Last seen\" FROM v_error_events WHERE $__timeFilter(window_start) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) GROUP BY 1,2,3 ORDER BY 4 DESC LIMIT 10"
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "type": "row",
+   "title": "Incident detail",
+   "gridPos": {
+    "x": 0,
+    "y": 32,
+    "w": 24,
+    "h": 1
+   },
+   "collapsed": false
+  },
+  {
+   "id": 23,
+   "title": "Incident log",
+   "type": "table",
+   "datasource": {
+    "type": "postgres",
+    "uid": "pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 33,
+    "w": 24,
+    "h": 10
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "postgres",
+      "uid": "pg"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT first_seen AS \"First seen\", severity AS \"Sev\", service AS \"Service\", error_type AS \"Type\", root_cause_category AS \"Root cause\", title AS \"Title\", event_count AS \"Events\", resolution_state AS \"State\", ROUND(ttr_minutes::numeric,1) AS \"TTR (min)\", root_cause AS \"Probable cause (LLM)\" FROM v_incidents WHERE $__timeFilter(first_seen) AND service IN ($service) AND severity IN ($severity) AND error_type IN ($error_type) ORDER BY first_seen DESC LIMIT 100"
+    }
+   ]
+  }
+ ]
+}

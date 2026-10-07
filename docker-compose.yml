@@ -1,0 +1,128 @@
+services:
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    ports: ["29092:29092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  kafka-init:
+    image: apache/kafka:3.7.0
+    depends_on:
+      kafka: {condition: service_healthy}
+    entrypoint: ["/bin/sh","-c"]
+    command:
+      - /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic raw-logs --partitions 3 --replication-factor 1
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pipeline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pipeline}
+      POSTGRES_DB: ${POSTGRES_DB:-incidents}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./sql/02_analytics.sql:/docker-entrypoint-initdb.d/02_analytics.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pipeline}"]
+      interval: 5s
+      retries: 10
+
+  producer:
+    build: ./producer
+    depends_on:
+      kafka-init: {condition: service_completed_successfully}
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      LOGS_PER_SECOND: ${LOGS_PER_SECOND:-20}
+      INCIDENT_EVERY_SECONDS: ${INCIDENT_EVERY_SECONDS:-90}
+
+  spark:
+    build: ./spark
+    image: logpipeline-spark
+    container_name: spark
+    depends_on:
+      kafka-init: {condition: service_completed_successfully}
+      postgres: {condition: service_healthy}
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      PG_HOST: postgres
+      PG_DB: ${POSTGRES_DB:-incidents}
+      PG_USER: ${POSTGRES_USER:-pipeline}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:-pipeline}
+    volumes:
+      - ./data:/data
+      - ivy-cache:/tmp/ivy
+
+  analytics:            # gold layer: Delta Lake -> hourly aggregates in Postgres (every few minutes)
+    build: ./spark
+    image: logpipeline-spark
+    depends_on:
+      postgres: {condition: service_healthy}
+      spark: {condition: service_started}
+    environment:
+      PG_HOST: postgres
+      PG_DB: ${POSTGRES_DB:-incidents}
+      PG_USER: ${POSTGRES_USER:-pipeline}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:-pipeline}
+    volumes:
+      - ./data:/data
+      - ivy-cache:/tmp/ivy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        while true; do
+          /opt/spark/bin/spark-submit --master local[1] \
+            --packages io.delta:delta-spark_2.12:3.2.0,org.postgresql:postgresql:42.7.3 \
+            --conf spark.jars.ivy=/tmp/ivy --conf spark.ui.enabled=false \
+            --class com.logpipeline.HourlyAggregates /opt/app/spark-job.jar
+          sleep ${ANALYTICS_REFRESH_SECONDS:-300}
+        done
+
+  summarizer:
+    build: ./summarizer
+    depends_on:
+      postgres: {condition: service_healthy}
+    env_file: [.env]
+    environment:
+      PG_HOST: postgres
+      PG_DB: ${POSTGRES_DB:-incidents}
+      PG_USER: ${POSTGRES_USER:-pipeline}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:-pipeline}
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports: ["3000:3000"]
+    depends_on: [postgres]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      PG_USER: ${POSTGRES_USER:-pipeline}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:-pipeline}
+      PG_DB: ${POSTGRES_DB:-incidents}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+volumes:
+  pgdata:
+  ivy-cache:
