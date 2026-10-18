@@ -1,4 +1,8 @@
 # Real-Time Log/Event Pipeline with LLM-Powered Incident Summarization (Java)
+[![CI](https://github.com/jiyapsawant/realtime-incident-monitoring/actions/workflows/ci.yml/badge.svg)](https://github.com/jiyapsawant/realtime-incident-monitoring/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+![Dashboard](docs/dashboard.png)
 
 ```
 Log sources ─▶ Kafka ─▶ Spark Structured Streaming ─┬▶ Delta Lake (all logs, analytics/training)

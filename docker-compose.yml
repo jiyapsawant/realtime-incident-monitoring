@@ -43,7 +43,7 @@ services:
       - ./sql/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
       - ./sql/02_analytics.sql:/docker-entrypoint-initdb.d/02_analytics.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pipeline}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pipeline} -d ${POSTGRES_DB:-incidents}"]
       interval: 5s
       retries: 10
 
